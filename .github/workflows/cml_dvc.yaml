@@ -63,9 +63,12 @@ jobs:
 
           # Commit new files generated (specified files or all files) to a new branch and create a pull request
           # The pull request can then be merged into dev branch
-          # --merge automerges the pull request (no need to manually do it) but it causes infinite loop still
-          # --squash works
-          # but isnt it better to manually accept to see changes are good anot
+          # --merge --skip-ci automerges the pull request (no need to manually do it) but it causes infinite loop still
+          # --squash --skip-ci automerges in a different way and it works. 
+          # If need human approval, can just omit the --merge/--squash option and manually Squash and merge by pressing the green button in the GitHub user interface. 
+          # Take note that you need to select "Squash and merge" not "Merge" by toggling the green button
+          # Final command cml pr --skip-ci {input}
+          
           cml pr --skip-ci model/random_forest.joblib.dvc
 
           # Create CML report
