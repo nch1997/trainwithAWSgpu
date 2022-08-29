@@ -1,0 +1,83 @@
+name: CML with DVC
+on:
+  push:
+    # it is also possible to chose which branch and action to run
+    # can also say which to ignore
+    branches: [dev]
+    # branches-ignore: [main, dev]
+jobs:
+  deploy-runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: iterative/setup-cml@v1
+      - name: Deploy runner on EC2
+        env:
+          REPO_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          cml runner \
+              --cloud=aws \
+              --cloud-region=ap-southeast-1c \
+              --cloud-type=t2.micro \
+              --labels=cml-runner \
+              --single
+  train-model:
+    needs: deploy-runner
+    runs-on: [self-hosted, cml-runner]
+    timeout-minutes: 120 # 2h
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      - uses: iterative/setup-cml@v1
+      - name: Train model
+        env:
+          REPO_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          S3_URL: ${{ secrets.S3_URL}}
+        run: |
+          cml ci
+          pip install -r requirements.txt
+          
+          # this two py file generate other files
+          python get_data.py
+          python train.py
+
+          # Connect to your DVC remote storage and push the model to there
+          # initialize dvc in local pc before push (dvc init)
+          dvc add model/random_forest.joblib # This automatically adds the model to your .gitignore
+
+
+          # github action wont update this Im not sure why
+          # so do it manually before pushing to repo
+          # dvc remote add -d -f myremote s3://${{ secrets.S3_URL}}
+
+          dvc push
+
+          # Commit new files generated (specified files or all files) to a new branch and create a pull request
+          # The pull request can then be merged into dev branch
+          cml pr --squash --skip-ci model/random_forest.joblib.dvc
+
+          # Create CML report
+          cat model/metrics.txt > report.md
+          cml publish model/confusion_matrix.png --md >> report.md
+          cml send-comment --pr --update report.md
+
+
+          # I NOTICE THAT WHEN I PUSH TO REPO GITHUB ACTION HAPPEN
+          # WHEN I MERGE THE PULL REQUEST ANOTHER GITHUB ACTION HAPPEN AGAIN???
+
+          # IF PUSH: BRANCHES: [main]
+          # WHEN PUSH TO MAIN REPO 1 RUN
+          # WHEN MERGE FROM CML BRANCH TO MAIN REPO IS ALSO CONSIDERED PUSH TO MAIN SO ANOTHER RUN
+          # INFINITE LOOP
+
+          # docs say pull requests created with cml pr wont trigger a new ci/cd run ???
+
