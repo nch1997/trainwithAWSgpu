@@ -63,6 +63,9 @@ jobs:
 
           # Commit new files generated (specified files or all files) to a new branch and create a pull request
           # The pull request can then be merged into dev branch
+          # --merge automerges the pull request (no need to manually do it) but it causes infinite loop still
+          # --squash works
+          # but isnt it better to manually accept to see changes are good anot
           cml pr --squash --skip-ci model/random_forest.joblib.dvc
 
           # Create CML report
